@@ -10,6 +10,7 @@ const AMAZON_REGION = "us-east-1";
 const AMAZON_HOST = "webservices.amazon.com";
 
 async function buscarMercadoLivre(query) {
+  console.log("Buscando Mercado Livre...");
   try {
     const res = await axios.get("https://api.mercadolibre.com/sites/MLB/search", {
       params: { q: query },
@@ -20,13 +21,18 @@ async function buscarMercadoLivre(query) {
       price: p.price,
       link: p.permalink,
     }));
-  } catch {
+  } catch (err) {
+    console.error("Erro Mercado Livre:", err.message);
     return [];
   }
 }
 
 async function buscarEbay(query) {
-  if (!EBAY_APP_ID) return [];
+  if (!EBAY_APP_ID) {
+    console.warn("EBAY_APP_ID não configurado.");
+    return [];
+  }
+  console.log("Buscando eBay...");
   try {
     const res = await axios.get(
       "https://svcs.ebay.com/services/search/FindingService/v1",
@@ -49,15 +55,18 @@ async function buscarEbay(query) {
       price: parseFloat(item.sellingStatus?.[0]?.currentPrice?.[0]?.__value__) || 0,
       link: item.viewItemURL?.[0] || "#",
     }));
-  } catch {
+  } catch (err) {
+    console.error("Erro eBay:", err.message);
     return [];
   }
 }
 
 async function buscarAmazon(query) {
-  if (!AMAZON_ACCESS_KEY || !AMAZON_SECRET_KEY || !AMAZON_ASSOCIATE_TAG)
+  if (!AMAZON_ACCESS_KEY || !AMAZON_SECRET_KEY || !AMAZON_ASSOCIATE_TAG) {
+    console.warn("Credenciais Amazon incompletas.");
     return [];
-
+  }
+  console.log("Buscando Amazon...");
   const endpoint = "/paapi5/searchitems";
   const method = "POST";
   const bodyObj = {
@@ -96,7 +105,10 @@ async function buscarAmazon(query) {
       res.on("end", () => {
         try {
           const json = JSON.parse(data);
-          if (!json.ItemsResult?.Items) return resolve([]);
+          if (!json.ItemsResult?.Items) {
+            console.warn("Amazon retornou sem itens");
+            return resolve([]);
+          }
           const items = json.ItemsResult.Items.slice(0, 5);
           const results = items.map((item) => {
             const title = item.ItemInfo?.Title?.DisplayValue || "Sem título";
@@ -110,12 +122,16 @@ async function buscarAmazon(query) {
             };
           });
           resolve(results);
-        } catch {
+        } catch (e) {
+          console.error("Erro parse Amazon:", e.message);
           resolve([]);
         }
       });
     });
-    req.on("error", () => resolve([]));
+    req.on("error", (e) => {
+      console.error("Erro requisição Amazon:", e.message);
+      resolve([]);
+    });
     req.write(body);
     req.end();
   });
@@ -125,6 +141,8 @@ export default async function handler(req, res) {
   const query = req.query.q;
   if (!query) return res.status(400).json({ error: "Query vazia" });
 
+  console.log("Recebendo busca por:", query);
+
   try {
     const [ml, ebay, amazon] = await Promise.all([
       buscarMercadoLivre(query),
@@ -133,7 +151,8 @@ export default async function handler(req, res) {
     ]);
     const produtos = [...ml, ...ebay, ...amazon];
 
-    // OpenAI ChatGPT recomendação
+    // Recomendação IA OpenAI
+    console.log("Consultando OpenAI...");
     const openaiRes = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -160,6 +179,7 @@ export default async function handler(req, res) {
 
     res.status(200).json({ produtos, recomendacao });
   } catch (err) {
+    console.error("Erro geral:", err.message);
     res.status(500).json({ error: err.message || "Erro interno" });
   }
 }

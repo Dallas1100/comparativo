@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
-        model: "gpt-4o",
+        model: "gpt-4o", // você pode trocar por gpt-3.5-turbo se quiser
         messages: [{ role: "user", content: mensagem }],
       },
       {
@@ -29,7 +29,7 @@ export default async function handler(req, res) {
     const resposta = response.data.choices[0].message.content;
     res.status(200).json({ resposta });
   } catch (error) {
-    console.error("Erro OpenAI:", error.response?.data || error.message);
-    res.status(500).json({ error: "Erro na API OpenAI" });
+    console.error("Erro na requisição OpenAI:", error?.response?.data || error.message);
+    res.status(500).json({ error: "Erro na comunicação com a OpenAI." });
   }
 }
